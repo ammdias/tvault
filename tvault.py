@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 
 """TVault
-Command line script to store Time-based One-Time Password (TOTP)  secret keys
+Command line script to store Time-based One-Time Password (TOTP) secret keys
 and generate TOTP passwords for two-factor authentication (2FA) on services that
 require it.  Depends on GnuPG for encrypting TOTP secrets and oathtool to generate
 the passwords.
 """
 
-__version__ = '0.1'
-__date__ = '2023-10-29'
+__version__ = '0.2'
+__date__ = '2023-11-05'
 __author__ = 'António Manuel Dias <ammdias@gmail.com>'
 __license__ = """
 This program is free software: you can redistribute it and/or modify
@@ -24,111 +24,210 @@ import subprocess
 
 
 usage = """Usage:
-  List all available services:
-  $ tvault -list
-
   Add SERVICE to available services:
   $ tvault -add SERVICE SECRET
+
+  Generate TOTP for SERVICE:
+  $ tvault SERVICE
+
+  Show secret key for SERVICE:
+  $ tvault -secret SERVICE
 
   Remove SERVICE from available services:
   $ tvault -del SERVICE
 
+  List all available services:
+  $ tvault -list
+
   Change vault password:
   $ tvault -chpass
 
-  Generate TOTP for SERVICE:
-  $ tvault SERVICE
+  Launch a Graphical User Interface to generate a TOTP or add a new service:
+  $ tvault -gui
 """
 
 
-def run(args):
-    """Main function."""
+#------------------------------------------------------------------------------
+# Main function
 
+def run(args):
+    """Run the script.
+    """
     # get tool paths
-    tools = gettoolpaths('gpg', 'oathtool', 'xclip', 'xsel')
+    tools = gettoolpaths('gpg', 'oathtool', 'xsel')
     if 'gpg' not in tools or 'oathtool' not in tools:
-        error("TOTP Vault needs GnuPG and oathtool to run.\n"
-              "Please make sure these are installed and in the PATH.")
-    if 'xclip' not in tools and 'xsel' not in tools:
-        print("Neither xclip or xsel are installed.\n"
-              "Generated codes will not be automatically copied to clipboard.\n"
-              "If you want this feature, please install one of those tools.")
+        raise TVaultException("TOTP Vault needs GnuPG and oathtool to run.\n"
+                              "Please make sure these are installed and in the PATH.")
+    if 'xsel' not in tools:
+        print("xsel is not installed.\n"
+              "Generated codes will not be automatically copied to the clipboard.\n"
+              "If you want this feature, please install xsel.")
 
     # get vault file path
     vaultpath = getvaultpath()
 
-    # execute action: list, add, delete or generate TOTP
+    # execute action
     match args[0], len(args):
+        case '-gui', 1:
+            showgui(tools, vaultpath)
         case '-list', 1:
             listservices(tools, vaultpath)
         case '-add', 3:
             addservice(tools, vaultpath, *args[1:])
         case '-del', 2:
             deleteservice(tools, vaultpath, args[1])
+        case '-secret', 2:
+            showservicekey(tools, vaultpath, args[1])
         case '-chpass', 1:
             changepassword(tools, vaultpath)
         case service, 1:
             generatetotp(tools, vaultpath, service)
         case _:
-            print(usage)
+            raise TVaultException(usage)
 
+
+#------------------------------------------------------------------------------
+# CLI functions
 
 def listservices(tools, vaultpath):
-    """List services available on vault file."""
+    """List services available on vault file.
+    """
     services = decrypt(tools, vaultpath)
     print('Available services:')
     if services:
         for name in services:
-            print(f"* {name}")
+            print(f'* {name}')
     else:
-        print("No service has been added yet.")
+        print('No service has been added yet.')
 
 
 def addservice(tools, vaultpath, service, secret):
-    """Add service to vault file."""
+    """Add service to vault file.
+    """
     service, secret = sanitycheck(service, secret)
     services = decrypt(tools, vaultpath)
     services[service] = secret
     encrypt(tools, vaultpath, services)
+    generatetotp(tools, vaultpath, service)
 
 
 def deleteservice(tools, vaultpath, service):
-    """Delete service from vault file."""
+    """Delete service from vault file.
+    """
     services = decrypt(tools, vaultpath)
     if service not in services:
-        error(f"Service '{service}' not found.")
+        raise TVaultException(f'Service {service} not found.')
 
     del services[service]
     encrypt(tools, vaultpath, services)
 
 
+def showservicekey(tools, vaultpath, service):
+    """Show secret key of service on vault file.
+    """
+    services = decrypt(tools, vaultpath)
+    if service not in services:
+        raise TVaultException(f'Service {service} not found.')
+
+    print(f'Secret key for {service}: {services[service]}')
+
+
 def changepassword(tools, vaultpath):
-    """Change vault file password."""
+    """Change vault file password.
+    """
     services = decrypt(tools, vaultpath)
     encrypt(tools, vaultpath, services)
 
 
 def generatetotp(tools, vaultpath, service):
-    """Generate TOTP for service on vault file."""
+    """Generate TOTP for service on vault file.
+    """
     services = decrypt(tools, vaultpath)
     if service not in services:
-        error(f"Service '{service}' not found.")
+        raise TVaultException(f'Service {service} not found.')
 
-    res = subprocess.run([tools['oathtool'], '--base32', '--totp',
-                         services[service]], capture_output=True)
-    if res.returncode != 0:
-        error("Error running oathtool.")
-
-    totp = res.stdout.decode(sys.stdout.encoding).strip()
-    print(f"TOTP code for '{service}': {totp}")
+    code = totp(tools, services[service])
+    print(f'TOTP code for {service}: {code}')
 
     # if possible, copy code to clipboard
-    clipboardinsert(tools, totp)
+    clipboardinsert(tools, code)
 
+
+#------------------------------------------------------------------------------
+# GUI functions
+
+def showgui(tools, vaultpath):
+    """Run graphical user interface.
+    """
+    zenity = gettoolpaths('zenity')
+    if not zenity:
+        raise TVaultException('Zenity not found.')
+    tools |= zenity
+
+    try:
+        services = decrypt(tools, vaultpath)
+        service_names = [*services, '* Add a service...']
+        service = gservice(tools, service_names)
+        match service:
+            case '* Add a service...':
+                gaddservice(tools, vaultpath, services)
+            case _:
+                code = totp(tools, services[service])
+                gshowcode(tools, service, code)
+    except SubrunException as e:
+        gerror(tools, f"Error while executing {e.command}.\n"
+                      f"{e.errortext}")
+    except Exception as e:
+        gerror(tools, str(e))
+
+
+def gservice(tools, items):
+    """Choose service.
+    """
+    return zenity(tools, '--list', '--text=Choose service:', '--column=Service',
+                         '--hide-header', *items)
+
+
+def gshowcode(tools, service, code):
+    """Show service code.
+    """
+    clipboardinsert(tools, code)
+    zenity(tools, '--info', f'--text=Code for {service}: {code}')
+
+
+def gaddservice(tools, vaultpath, services):
+    """Add a service.
+    """
+    service = ggettext(tools, 'New service name:')
+    secret = ggettext(tools, f'Secret key for service {service}:').strip()
+    service, secret = sanitycheck(service, secret)
+
+    services[service] = secret
+    encrypt(tools, vaultpath, services)
+    code = totp(tools, secret)
+    gshowcode(tools, service, code)
+
+
+def ggettext(tools, text):
+    """Get text from user.
+    """
+    return zenity(tools, '--entry', f'--text={text}')
+
+
+def gerror(tools, error):
+    """Show error message and exit.
+    """
+    zenity(tools, '--error', f'--text={error}')
+    sys.exit(1)
+
+
+#------------------------------------------------------------------------------
+# tools
 
 def gettoolpaths(*tools):
     """Check system for tool paths.
-       Returns dictionary with paths for tools."""
+       Returns dictionary with paths for tools.
+    """
     res = {}
     for t in tools:
         path = shutil.which(t)
@@ -139,7 +238,8 @@ def gettoolpaths(*tools):
 
 
 def getvaultpath():
-    """Get vault file path."""
+    """Get vault file path.
+    """
     home = os.path.expanduser('~')
     config_dir = os.path.join(home, '.config')
     if os.path.isdir(config_dir):
@@ -149,85 +249,125 @@ def getvaultpath():
 
 
 def encrypt(tools, vaultpath, services):
-    """Encode and encrypt service/secret pairs into vault file."""
+    """Encode and encrypt service/secret pairs into vault file.
+    """
     # build vault from services' name / secret pairs
     # one service perline, separator is ':'
-    vault = '\n'.join(f"{name}:{services[name]}" for name in services)
-    res = subprocess.run([tools['gpg'], '--quiet', '--symmetric', '--armour',
-                         '--yes', '--output', vaultpath],
-                         input=vault.encode(sys.stdin.encoding))
-    if res.returncode != 0:
-        error(f"Unable to write vault file at '{vaultpath}'.")
+    vault = '\n'.join(f'{name}:{services[name]}' for name in services)
+    subrun(tools['gpg'], '--quiet', '--symmetric', '--armour',
+                         '--yes', '--output', vaultpath, inpt=vault)
 
 
 def decrypt(tools, vaultpath):
     """Decrypt vault file,
-       return dictionary with service/secret pairs."""
+       return dictionary with service/secret pairs.
+    """
     services = {}
     if not os.path.exists(vaultpath):
        encrypt(tools, vaultpath, services)
 
-    res = subprocess.run([tools['gpg'], '--quiet', '--decrypt', vaultpath],
-                         capture_output = True)
-    if res.returncode != 0:
-       error(f"Wrong password or corrupted vault file at '{vaultpath}'.")
+    res = subrun(tools['gpg'], '--quiet', '--decrypt', vaultpath)
 
     # read vault service names / secret codes
     # one service per line
     # empty lines or lines started with ';' are ignored
-    for line in res.stdout.decode(sys.stdout.encoding).splitlines():
+    for line in res.splitlines():
         line = line.strip()
         if not line or line.startswith(';'):
             continue
         name, sep, secret = line.partition(':')
         if not sep or not secret:
-            error(f"Corruted line in vault at '{vaultpath}'.")
+            raise TVaultException(f"Corruted line in vault file at '{vaultpath}'.")
         services[name] = secret
 
     return services
 
 
+def totp(tools, secret):
+    """Generate TOTP code for service.
+    """
+    return subrun(tools['oathtool'], '--base32', '--totp', secret)
+
+
 def sanitycheck(service, secret):
-    """Sanity check service name and secret."""
+    """Sanity check service name and secret.
+    """
     service, secret = service.strip(), secret.strip()
     if not service or not secret:
-        error("Service name and secret must not be empty.")
+        raise TVaultException('Service name and secret must not be empty.')
     if ':' in service:
-        error("Service name must not contain a colon.")
-    if service.startswith(';') or service.startswith('-'):
-        error("Service name must not start with semicolon or dash.")
+        raise TVaultException('Service name can not contain a colon.')
+    if not service[0].isalnum():
+        raise TVaultException('Service name must start with a letter or a number.')
     
     return service, secret
 
 
 def clipboardinsert(tools, text):
-    """Insert text on primary and secondary clipboard."""
-    text = text.encode(sys.stdin.encoding)
-
-    if tools['xclip']:
-        subprocess.run([tools['xclip'], '-in', '-selection', 'primary'], input=text)
-        subprocess.run([tools['xclip'], '-in', '-selection', 'clipboard'], input=text)
-        
-    elif tools['xsel']:
-        subprocess.run([tools['xsel'], '--input', '--primary'], input=text)
-        subprocess.run([tools['xsel'], '--input', '--clipboard'], input=text)
-
-    else:
-        return
-
-    print("Code automatically copied to clipboard.")
+    """Insert text on primary and secondary clipboard.
+    """
+    if 'xsel' in tools:
+        subrun(tools['xsel'], '--input', '--primary', inpt=text)
+        subrun(tools['xsel'], '--input', '--clipboard', inpt=text)
+        print('Code copied to clipboard.')
 
 
-def error(text):
-    """Show error message and exit."""
-    print(f"Error: {text}")
-    sys.exit(1)
+def subrun(command, *options, inpt=None):
+    """Execute system command.
+    """
+    if inpt:
+        inpt = inpt.encode(sys.stdin.encoding) 
+
+    res = subprocess.run([command, *options], capture_output=True, input=inpt)
+    if res.returncode != 0:
+        etext = res.stderr.decode(sys.stdout.encoding).strip() if res.stderr else ''
+        raise SubrunException(command, res.returncode, etext)
+                              
+    return res.stdout.decode(sys.stdout.encoding).strip() if res.stdout else ''
+
+
+def zenity(tools, dialog, *options):
+    """Show zenity dialog.
+    """
+    try:
+        return subrun(tools['zenity'], dialog, '--title=TVault', *options)
+    except SubrunException as e:
+        if e.errorcode == 1:
+            gerror(tools, 'Action cancelled by user.')
+        else:
+            raise e
 
 
 #------------------------------------------------------------------------------
+# Exceptions
+
+class TVaultException(Exception):
+    pass
+
+
+class SubrunException(TVaultException):
+    def __init__(self, command, errorcode, errortext):
+        super().__init__(f'Failed to execute {command}.')
+        self.command = command
+        self.errorcode = errorcode
+        self.errortext = errortext
+
+
+#------------------------------------------------------------------------------
+# Script entry point
 
 if __name__ == "__main__":
-    if 2 > len(sys.argv) or len(sys.argv) > 4:
+    if 2 <= len(sys.argv) <= 4:
+        try:
+            run(sys.argv[1:])
+        except SubrunException as e:
+            print(f'Error while executing {e.command}.')
+            print(e.errortext)
+            sys.exit(1)
+        except Exception as e:
+            print(f'Error: {e}')
+            sys.exit(1)
+    else:
         print(f"""
 {__doc__}
 version {__version__}
@@ -235,5 +375,3 @@ Copyright (C) 2023 {__author__}
 {__license__}
 {usage}
 """)
-    else:
-        run(sys.argv[1:])

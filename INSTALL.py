@@ -9,8 +9,8 @@ START_SCRIPT = 'tvault.py'
 LINK_NAME = 'tvault'
 CONFIG_FILES = ()  # must be a tuple or list
 
-__version__ = '0.1'
-__date__ = '2023-10-27'
+__version__ = '0.2'
+__date__ = '2023-11-05'
 __author__ = 'António Manuel Dias <ammdias@gmail.com>'
 __license__ = '''
 This program is free software: you can redistribute it and/or modify
