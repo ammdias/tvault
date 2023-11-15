@@ -7,8 +7,8 @@ require it.  Depends on GnuPG for encrypting TOTP secrets and oathtool to genera
 the passwords.
 """
 
-__version__ = '0.2'
-__date__ = '2023-11-05'
+__version__ = '0.3'
+__date__ = '2023-11-15'
 __author__ = 'António Manuel Dias <ammdias@gmail.com>'
 __license__ = """
 This program is free software: you can redistribute it and/or modify
@@ -19,7 +19,7 @@ the Free Software Foundation, either version 3 of the License, or
 
 import sys
 import shutil
-import os.path
+import os
 import subprocess
 
 
@@ -30,20 +30,26 @@ usage = """Usage:
   Generate TOTP for SERVICE:
   $ tvault SERVICE
 
-  Show secret key for SERVICE:
-  $ tvault -secret SERVICE
-
-  Remove SERVICE from available services:
-  $ tvault -del SERVICE
+  Launch a Graphical User Interface to generate a TOTP or add a new service:
+  $ tvault -gui
 
   List all available services:
   $ tvault -list
 
+  Remove SERVICE from available services:
+  $ tvault -del SERVICE
+
+  Show secret key for SERVICE:
+  $ tvault -secret SERVICE
+
   Change vault password:
   $ tvault -chpass
 
-  Launch a Graphical User Interface to generate a TOTP or add a new service:
-  $ tvault -gui
+  Encrypt vault file with a GnuPG public key
+  $ tvault -recipient KEY_ID
+
+  Encrypt vault file with symmetric key
+  $ tvault -symmetric
 """
 
 
@@ -54,14 +60,16 @@ def run(args):
     """Run the script.
     """
     # get tool paths
-    tools = gettoolpaths('gpg', 'oathtool', 'xsel')
+    tools = gettoolpaths('gpg', 'oathtool')
     if 'gpg' not in tools or 'oathtool' not in tools:
         raise TVaultException("TOTP Vault needs GnuPG and oathtool to run.\n"
                               "Please make sure these are installed and in the PATH.")
-    if 'xsel' not in tools:
-        print("xsel is not installed.\n"
-              "Generated codes will not be automatically copied to the clipboard.\n"
-              "If you want this feature, please install xsel.")
+    if 'DISPLAY' in os.environ:
+        tools |= gettoolpaths('xsel')
+        if 'xsel' not in tools:
+            print("xsel is not installed.\n"
+                  "Generated codes will not be automatically copied to the clipboard.\n"
+                  "If you want this feature, please install xsel.")
 
     # get vault file path
     vaultpath = getvaultpath()
@@ -69,17 +77,24 @@ def run(args):
     # execute action
     match args[0], len(args):
         case '-gui', 1:
-            showgui(tools, vaultpath)
+            if 'DISPLAY' in os.environ:
+                showgui(tools, vaultpath)
+            else:
+                raise TVaultException('GUI not available on this terminal.')
         case '-list', 1:
             listservices(tools, vaultpath)
         case '-add', 3:
             addservice(tools, vaultpath, *args[1:])
         case '-del', 2:
-            deleteservice(tools, vaultpath, args[1])
+            delservice(tools, vaultpath, args[1])
         case '-secret', 2:
             showservicekey(tools, vaultpath, args[1])
         case '-chpass', 1:
             changepassword(tools, vaultpath)
+        case '-recipient', 2:
+            addrecipient(tools, vaultpath, args[1])
+        case '-symmetric', 1:
+            delrecipient(tools, vaultpath)
         case service, 1:
             generatetotp(tools, vaultpath, service)
         case _:
@@ -93,10 +108,9 @@ def listservices(tools, vaultpath):
     """List services available on vault file.
     """
     services = decrypt(tools, vaultpath)
-    print('Available services:')
+    services = '\n'.join([f'* {name}' for name in services if name.isalnum()])
     if services:
-        for name in services:
-            print(f'* {name}')
+        print(f"Available services:\n{services}")
     else:
         print('No service has been added yet.')
 
@@ -111,7 +125,7 @@ def addservice(tools, vaultpath, service, secret):
     generatetotp(tools, vaultpath, service)
 
 
-def deleteservice(tools, vaultpath, service):
+def delservice(tools, vaultpath, service):
     """Delete service from vault file.
     """
     services = decrypt(tools, vaultpath)
@@ -139,6 +153,23 @@ def changepassword(tools, vaultpath):
     encrypt(tools, vaultpath, services)
 
 
+def addrecipient(tools, vaultpath, recipient):
+    """Encrypt vault file with a GnuPG public key.
+    """
+    services = decrypt(tools, vaultpath)
+    services['-recipient'] = recipient
+    encrypt(tools, vaultpath, services)
+
+
+def delrecipient(tools, vaultpath):
+    """Encrypt vault file with symmetric key.
+    """
+    services = decrypt(tools, vaultpath)
+    if '-recipient' in services:
+        del services['-recipient']
+    encrypt(tools, vaultpath, services)
+
+
 def generatetotp(tools, vaultpath, service):
     """Generate TOTP for service on vault file.
     """
@@ -159,14 +190,14 @@ def generatetotp(tools, vaultpath, service):
 def showgui(tools, vaultpath):
     """Run graphical user interface.
     """
-    zenity = gettoolpaths('zenity')
-    if not zenity:
+    tools |= gettoolpaths('zenity')
+    if 'zenity' not in tools:
         raise TVaultException('Zenity not found.')
-    tools |= zenity
 
     try:
         services = decrypt(tools, vaultpath)
-        service_names = [*services, '* Add a service...']
+        service_names = [name for name in services if name.isalnum()]
+        service_names.append('* Add a service...')
         service = gservice(tools, service_names)
         match service:
             case '* Add a service...':
@@ -199,7 +230,7 @@ def gaddservice(tools, vaultpath, services):
     """Add a service.
     """
     service = ggettext(tools, 'New service name:')
-    secret = ggettext(tools, f'Secret key for service {service}:').strip()
+    secret = ggettext(tools, f'Secret key for service {service}:')
     service, secret = sanitycheck(service, secret)
 
     services[service] = secret
@@ -254,8 +285,15 @@ def encrypt(tools, vaultpath, services):
     # build vault from services' name / secret pairs
     # one service perline, separator is ':'
     vault = '\n'.join(f'{name}:{services[name]}' for name in services)
-    subrun(tools['gpg'], '--quiet', '--symmetric', '--armour',
-                         '--yes', '--output', vaultpath, inpt=vault)
+    if '-recipient' in services:
+        if not isrecipient(tools, services['-recipient']):
+            raise TVaultException(f"Secret key for {services['-recipient']} not found.")
+        subrun(tools['gpg'], '--encrypt', '--quiet', '--armour', '--yes',
+                             '--recipient', services['-recipient'],
+                             '--output', vaultpath, inpt=vault)
+    else:
+        subrun(tools['gpg'], '--quiet', '--symmetric', '--armour',
+                             '--yes', '--output', vaultpath, inpt=vault)
 
 
 def decrypt(tools, vaultpath):
@@ -277,10 +315,20 @@ def decrypt(tools, vaultpath):
             continue
         name, sep, secret = line.partition(':')
         if not sep or not secret:
-            raise TVaultException(f"Corruted line in vault file at '{vaultpath}'.")
+            raise TVaultException(f"Corrupted line in vault file at '{vaultpath}'.")
         services[name] = secret
 
     return services
+
+
+def isrecipient(tools, keyid):
+    """Check if secret key is in GnuPG keyring.
+    """
+    keyid = f'<{keyid}>'
+    uids = [i for i in subrun(tools['gpg'], '--list-secret-keys').splitlines()
+              if i.startswith('uid') and '[ultimate]' in i and keyid in i]
+
+    return len(uids) > 0
 
 
 def totp(tools, secret):
@@ -295,10 +343,11 @@ def sanitycheck(service, secret):
     service, secret = service.strip(), secret.strip()
     if not service or not secret:
         raise TVaultException('Service name and secret must not be empty.')
-    if ':' in service:
-        raise TVaultException('Service name can not contain a colon.')
-    if not service[0].isalnum():
-        raise TVaultException('Service name must start with a letter or a number.')
+    if not service.isalnum():
+        raise TVaultException('Service name must consist of letters and numbers.')
+    for c in secret.upper():
+        if c not in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ 234567':
+            raise TVaultException('Secret key is not a valid base32 string.') 
     
     return service, secret
 
@@ -357,15 +406,15 @@ class SubrunException(TVaultException):
 # Script entry point
 
 if __name__ == "__main__":
-    if 2 <= len(sys.argv) <= 4:
+    if len(sys.argv) >= 2:
         try:
             run(sys.argv[1:])
         except SubrunException as e:
-            print(f'Error while executing {e.command}.')
-            print(e.errortext)
+            print(f'Error while executing {e.command}.', file=sys.stderr)
+            print(e.errortext, file=sys.stderr)
             sys.exit(1)
         except Exception as e:
-            print(f'Error: {e}')
+            print(f'Error: {e}', file=sys.stderr)
             sys.exit(1)
     else:
         print(f"""

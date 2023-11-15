@@ -1,6 +1,6 @@
 TVault
 ======
-version 0.2
+version 0.3
 
 Copyright (C) 2023 António Manuel Dias
 
@@ -46,8 +46,9 @@ INSTALLATION AND BASIC USAGE
 The following instructions describe the installation process for basic usage
 in a Linux environment.
 
-1. Open a terminal in the directory where the program was uncompressed and run
-   the installation script with Python 3:
+1. Download the zip file containing the program and uncompress it. Then, open a
+   terminal in the directory where the program was uncompressed and run the
+   installation script with Python 3:
 
          $ python3 INSTALL.py
 
@@ -76,7 +77,7 @@ in a Linux environment.
      asked if you want to overwrite it.  Answer "`yes`" (or just "`y`") if that
      is the case or "`no`"/"`n`" if not.
 
-2. Test that the installation was successful with the command:
+3. Test that the installation was successful with the command:
 
          $ tvault
          
@@ -107,9 +108,8 @@ You may create the file by listing the stored keys:
     $ tvault -list
 
 GnuPG will now ask for the key to encrypt the file. Enter the key in the
-form (or at the command line, if a graphical interface is not available)
-and the file will be created. If everything goes well the program will
-terminate stating that no services has been added yet.
+form and the file will be created. If everything goes well the program will
+terminate stating that no services have been added yet.
 
 You may also use the program's graphical user interface to do the same:
 
@@ -165,7 +165,7 @@ the clipboard if `xsel` is installed.
 
 ### Generate a TOTP 
      
-To generate a TOTP code dor a service, use the command:
+To generate a TOTP code for a service, use the command:
 
     $ tvault SERVICE
 
@@ -175,7 +175,7 @@ then insert it on the service input field. For example, for the Mastodon
 service added earlier:
 
     $ tvault mastodon
-    TOTP code for mastodon: 547512
+    TOTP code for mastodon: 12345
     Code copied to clipboard.
 
 Any time the service asks for a 2FA code, just open a terminal and use the
@@ -199,12 +199,29 @@ To check the secret key of a service:
 
     $ tvault -secret SERVICE
  
-And, to change the vault file's password:
+To change the vault file's password:
 
     $ tvault -chpass
 
 Note that each time the stored filed is read --- basically, every time you
 use the program --- you will be prompted for its password, unless you have
-used it recently and GnuPG agent has it cached. Similarly, every time the
+used it recently and GnuPG agent has it cached.  Similarly, every time the
 file is written you will be prompted for the password to encrypt it. You
 may use the same password as before or change it.
+
+The vault file may also be encrypted with a GnuPG public key, if the user
+already has a public/private key pair on GnuPG's keyring.  This will ease
+the use of the script, as it doesn't need to ask for the password to encrypt
+the file, only the secret key passphrase to decrypt it.  To do this, use
+the command:
+
+    $ tvault -recipient KEY_ID
+
+Replace KEY_ID with the identification of the public key to use (e.g. one of
+its email addresses).  If the private key for that public key is not in
+GnuPG's keyring, the command will fail, preventing the encryption of the file
+with a key that the user cannot decrypt.
+
+To revert the file to a symmetric key encryption, use the command:
+
+    $ tvault -symmetric

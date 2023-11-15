@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Installation script for TOTP Vault program.
-"""
+'''Installation script for TOTP Vault program.
+'''
 
 FILES = ('tvault.py', 'LICENSE.md', 'README.md',
          '__version__', 'CHANGES.md')
@@ -9,8 +9,8 @@ START_SCRIPT = 'tvault.py'
 LINK_NAME = 'tvault'
 CONFIG_FILES = ()  # must be a tuple or list
 
-__version__ = '0.2'
-__date__ = '2023-11-05'
+__version__ = '0.3'
+__date__ = 'TODO'
 __author__ = 'António Manuel Dias <ammdias@gmail.com>'
 __license__ = '''
 This program is free software: you can redistribute it and/or modify
@@ -46,11 +46,11 @@ def _quit(msg):
 
 
 def yesno(question):
-    """Get a yes or no answer to a question.
-    """
+    '''Get a yes or no answer to a question.
+    '''
     answer = ''
     while answer not in ('y', 'yes', 'n', 'no'):
-        answer = input(question + ' (y/n): ').strip().lower()
+        answer = input(f'{question} (y/n): ').strip().lower()
 
     return answer in ('y', 'yes')
 
