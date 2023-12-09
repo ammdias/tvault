@@ -7,8 +7,8 @@ require it.  Depends on GnuPG for encrypting TOTP secrets and oathtool to genera
 the passwords.
 """
 
-__version__ = '0.3'
-__date__ = '2023-11-15'
+__version__ = '0.4'
+__date__ = '2023-12-09'
 __author__ = 'António Manuel Dias <ammdias@gmail.com>'
 __license__ = """
 This program is free software: you can redistribute it and/or modify
@@ -50,6 +50,9 @@ usage = """Usage:
 
   Encrypt vault file with symmetric key
   $ tvault -symmetric
+
+  Uninstall the program
+  $ tvault -uninstall
 """
 
 
@@ -61,12 +64,12 @@ def run(args):
     """
     # get tool paths
     tools = gettoolpaths('gpg', 'oathtool')
-    if 'gpg' not in tools or 'oathtool' not in tools:
+    if tools['gpg'] is None or tools['oathtool'] is None:
         raise TVaultException("TOTP Vault needs GnuPG and oathtool to run.\n"
                               "Please make sure these are installed and in the PATH.")
     if 'DISPLAY' in os.environ:
         tools |= gettoolpaths('xsel')
-        if 'xsel' not in tools:
+        if tools['xsel'] is None:
             print("xsel is not installed.\n"
                   "Generated codes will not be automatically copied to the clipboard.\n"
                   "If you want this feature, please install xsel.")
@@ -95,6 +98,9 @@ def run(args):
             addrecipient(tools, vaultpath, args[1])
         case '-symmetric', 1:
             delrecipient(tools, vaultpath)
+        case '-uninstall', 1:
+            from UNINSTALL import uninstall
+            uninstall()
         case service, 1:
             generatetotp(tools, vaultpath, service)
         case _:
@@ -191,7 +197,7 @@ def showgui(tools, vaultpath):
     """Run graphical user interface.
     """
     tools |= gettoolpaths('zenity')
-    if 'zenity' not in tools:
+    if tools['zenity'] is None:
         raise TVaultException('Zenity not found.')
 
     try:
@@ -259,13 +265,7 @@ def gettoolpaths(*tools):
     """Check system for tool paths.
        Returns dictionary with paths for tools.
     """
-    res = {}
-    for t in tools:
-        path = shutil.which(t)
-        if path:
-            res[t] = path
-
-    return res
+    return { t: shutil.which(t) for t in tools }
 
 
 def getvaultpath():

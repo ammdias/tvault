@@ -1,6 +1,6 @@
 TVault
 ======
-version 0.3
+version 0.4
 
 Copyright (C) 2023 António Manuel Dias
 
@@ -77,12 +77,12 @@ in a Linux environment.
      asked if you want to overwrite it.  Answer "`yes`" (or just "`y`") if that
      is the case or "`no`"/"`n`" if not.
 
-3. Test that the installation was successful with the command:
+2. Test that the installation was successful with the command:
 
          $ tvault
          
      The program should print the license notice and usage on the terminal.
-     
+
 
 ## Usage:
    
@@ -137,7 +137,7 @@ so it's your choice) and `SECRET` with the string given by the service.
 If the secret key has spaces you may remove them or envelop the string
 in quotes. For example, to add the secret key for a Mastodon instance:
 
-    $ tvault -add mastodon "ABCD 2345 EFGH 67IJ KLMN OPQR STUV WXYZ"
+    $ tvault -add mastodon "ABCD EFGH IJKL MNOP QRST UVWX YZ23 4567"
 
 GnuPG will now ask for the key to open the vault file (the same you used
 when creating the file) and then the key to encrypt the file again.
@@ -170,12 +170,12 @@ To generate a TOTP code for a service, use the command:
     $ tvault SERVICE
 
 The program will print the generated password (6 digits) in the terminal
-and, if `xsel` are installed, copy it to the system clipboard.  You may
+and, if `xsel` is installed, copy it to the system clipboard.  You may
 then insert it on the service input field. For example, for the Mastodon
 service added earlier:
 
     $ tvault mastodon
-    TOTP code for mastodon: 12345
+    TOTP code for mastodon: 123456
     Code copied to clipboard.
 
 Any time the service asks for a 2FA code, just open a terminal and use the
@@ -217,11 +217,22 @@ the command:
 
     $ tvault -recipient KEY_ID
 
-Replace KEY_ID with the identification of the public key to use (e.g. one of
-its email addresses).  If the private key for that public key is not in
-GnuPG's keyring, the command will fail, preventing the encryption of the file
-with a key that the user cannot decrypt.
+Replace KEY_ID with the identification of the public key to use (its email
+address).  If the private key for that public key is not in GnuPG's keyring,
+the command will fail, preventing the encryption of the file with a key that
+the user cannot decrypt.
 
 To revert the file to a symmetric key encryption, use the command:
 
     $ tvault -symmetric
+
+
+### Uninstall the program
+     
+You may uninstall the program with the command:
+
+    $ tvault -uninstall
+
+or, from within the directory where the program ins installed:
+
+    $ python3 UNINSTALL.py

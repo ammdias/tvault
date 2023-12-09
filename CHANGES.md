@@ -5,6 +5,11 @@ TOTP Vault
 
 Changes List:
 
+    * 0.4: Added uninstall option.
+           Simplified path discovery.
+           Changed installation script.
+           Updated README file.
+
     * 0.3: Added `-recipient` and `-symmetric` options.
            CLI error messages are now printed in stderr instead of stdout.
            Script exits with error if -gui option passed when a GUI is not
