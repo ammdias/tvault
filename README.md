@@ -1,6 +1,6 @@
 TVault
 ======
-version 0.4
+version 0.5
 
 Copyright (C) 2023 António Manuel Dias
 
@@ -90,7 +90,8 @@ Before using the program, make sure `GnuPG` and `oathtool` are installed
 on your system. The script will not work without them. Also, if you
 want the script to copy the generated codes to the clipboard, which is
 a nice feature to have so that you don't need to memorize them or
-copy them yourself, you should install `xsel`.
+copy them yourself, you should install `xsel` if you are using X11 or
+`wl-clipboard`, for `wl-copy`, if you are in Wayland instead.
     
 
 ### First use
@@ -147,8 +148,9 @@ your option.
 
 If the operation is successful, the service will be added to the vault
 and the program will generate and print a new TOTP code for this service,
-to finalize the setup on the site. If `xsel` is installed, this code will
-be copied to the clipboard and may be pasted at the service's site form.
+to finalize the setup on the site. If `xsel`, on X11, or `wl-clipboard`,
+in Wayland are installed, this code will be copied to the clipboard and
+may be pasted at the service's site form.
 
 
 ### Adding a service (on the graphical user interface)
@@ -160,7 +162,7 @@ vault file, if the program asks for it.  Then select the option
 for the service (see the section above) and finally the key to encrypt
 the vault file.  If all goes well, a dialog with the TOTP code to finalize
 the setup on the service's site.  As before, this code will be copied to
-the clipboard if `xsel` is installed.
+the clipboard if `xsel` or `wl-clipboard` are installed.
      
 
 ### Generate a TOTP 
@@ -170,9 +172,9 @@ To generate a TOTP code for a service, use the command:
     $ tvault SERVICE
 
 The program will print the generated password (6 digits) in the terminal
-and, if `xsel` is installed, copy it to the system clipboard.  You may
-then insert it on the service input field. For example, for the Mastodon
-service added earlier:
+and, if `xsel` or `wl-clipboard` are installed, copy it to the system 
+clipboard.  You may then insert it on the service input field. For example,
+for the Mastodon service added earlier:
 
     $ tvault mastodon
     TOTP code for mastodon: 123456

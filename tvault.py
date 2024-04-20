@@ -7,8 +7,8 @@ require it.  Depends on GnuPG for encrypting TOTP secrets and oathtool to genera
 the passwords.
 """
 
-__version__ = '0.4'
-__date__ = '2023-12-09'
+__version__ = '0.5'
+__date__ = '2024-04-20'
 __author__ = 'António Manuel Dias <ammdias@gmail.com>'
 __license__ = """
 This program is free software: you can redistribute it and/or modify
@@ -67,12 +67,19 @@ def run(args):
     if tools['gpg'] is None or tools['oathtool'] is None:
         raise TVaultException("TOTP Vault needs GnuPG and oathtool to run.\n"
                               "Please make sure these are installed and in the PATH.")
-    if 'DISPLAY' in os.environ:
-        tools |= gettoolpaths('xsel')
-        if tools['xsel'] is None:
-            print("xsel is not installed.\n"
-                  "Generated codes will not be automatically copied to the clipboard.\n"
-                  "If you want this feature, please install xsel.")
+    match os.environ.get('XDG_SESSION_TYPE'):
+        case 'x11':
+            tools |= gettoolpaths('xsel')
+            if tools['xsel'] is None:
+                print("xsel is not installed.\n"
+                      "Generated codes will not be automatically copied to the clipboard.\n"
+                      "If you want this feature, please install xsel.")
+        case 'wayland':
+            tools |= gettoolpaths('wl-copy')
+            if tools['wl-copy'] is None:
+                print("wl-clipboard is not installed.\n"
+                      "Generated codes will not be automatically copied to the clipboard.\n"
+                      "If you want this feature, please install wl-clipboard.")
 
     # get vault file path
     vaultpath = getvaultpath()
@@ -359,6 +366,15 @@ def clipboardinsert(tools, text):
         subrun(tools['xsel'], '--input', '--primary', inpt=text)
         subrun(tools['xsel'], '--input', '--clipboard', inpt=text)
         print('Code copied to clipboard.')
+    elif 'wl-copy' in tools:
+        # cannot use 'capture=True', so cannot use subrun()
+        if res := subprocess.run([tools['wl-copy'], text]).returncode != 0:
+            etext = res.stderr.decode(sys.stdout.encoding).strip() if res.stderr else ''
+            raise SubrunException(command, res.returncode, etext)
+        if res := subprocess.run([tools['wl-copy'], '--primary', text]).returncode != 0:
+            etext = res.stderr.decode(sys.stdout.encoding).strip() if res.stderr else ''
+            raise SubrunException(command, res.returncode, etext)
+        print('Code copied to clipboard.')
 
 
 def subrun(command, *options, inpt=None):
@@ -417,9 +433,13 @@ if __name__ == "__main__":
             print(f'Error: {e}', file=sys.stderr)
             sys.exit(1)
     else:
+        try:
+            appver = open(os.path.join(sys.path[0], '__version__')).read().strip()
+        except:
+            appver = __version__
         print(f"""
 {__doc__}
-version {__version__}
+version {appver}
 Copyright (C) 2023 {__author__}
 {__license__}
 {usage}

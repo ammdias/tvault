@@ -5,6 +5,8 @@ TOTP Vault
 
 Changes List:
 
+    * 0.5: Added support for Wayland clipboard (wl-clipboard).
+
     * 0.4: Added uninstall option.
            Simplified path discovery.
            Changed installation script.
