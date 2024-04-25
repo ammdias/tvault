@@ -3,8 +3,8 @@
 
 DOC = 'Installation script for TOTP Vault program.'''
 COPYRIGHT_YEAR = '2023'
-VERSION = '0.5'
-DATE = '2024-04-20'
+VERSION = '0.6'
+DATE = '2024-04-25'
 AUTHOR = 'António Manuel Dias <ammdias@gmail.com>'
 LICENSE = '''
 This program is free software: you can redistribute it and/or modify

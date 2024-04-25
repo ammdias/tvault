@@ -1,6 +1,6 @@
 TVault
 ======
-version 0.5
+version 0.6
 
 Copyright (C) 2023 António Manuel Dias
 
@@ -109,8 +109,8 @@ You may create the file by listing the stored keys:
     $ tvault -list
 
 GnuPG will now ask for the key to encrypt the file. Enter the key in the
-form and the file will be created. If everything goes well the program will
-terminate stating that no services have been added yet.
+dialog and the file will be created. If everything goes well the program
+will terminate stating that no services have been added yet.
 
 You may also use the program's graphical user interface to do the same:
 
@@ -148,7 +148,7 @@ your option.
 
 If the operation is successful, the service will be added to the vault
 and the program will generate and print a new TOTP code for this service,
-to finalize the setup on the site. If `xsel`, on X11, or `wl-clipboard`,
+to finalize the setup on the site. If `xsel`, in X11, or `wl-clipboard`,
 in Wayland are installed, this code will be copied to the clipboard and
 may be pasted at the service's site form.
 
@@ -161,8 +161,8 @@ vault file, if the program asks for it.  Then select the option
 `* Add a new service...`, insert the service name, the secret key
 for the service (see the section above) and finally the key to encrypt
 the vault file.  If all goes well, a dialog with the TOTP code to finalize
-the setup on the service's site.  As before, this code will be copied to
-the clipboard if `xsel` or `wl-clipboard` are installed.
+the setup on the service's site will be shown.  As before, this code will
+be copied to the clipboard if `xsel` or `wl-clipboard` are installed.
      
 
 ### Generate a TOTP 
@@ -235,6 +235,6 @@ You may uninstall the program with the command:
 
     $ tvault -uninstall
 
-or, from within the directory where the program ins installed:
+or, from within the directory where the program is installed:
 
     $ python3 UNINSTALL.py

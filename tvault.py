@@ -7,8 +7,8 @@ require it.  Depends on GnuPG for encrypting TOTP secrets and oathtool to genera
 the passwords.
 """
 
-__version__ = '0.5'
-__date__ = '2024-04-20'
+__version__ = '0.6'
+__date__ = '2024-04-25'
 __author__ = 'António Manuel Dias <ammdias@gmail.com>'
 __license__ = """
 This program is free software: you can redistribute it and/or modify
@@ -311,7 +311,7 @@ def decrypt(tools, vaultpath):
     if not os.path.exists(vaultpath):
        encrypt(tools, vaultpath, services)
 
-    res = subrun(tools['gpg'], '--quiet', '--decrypt', vaultpath)
+    res = subqry(tools['gpg'], '--quiet', '--decrypt', vaultpath)
 
     # read vault service names / secret codes
     # one service per line
@@ -332,7 +332,7 @@ def isrecipient(tools, keyid):
     """Check if secret key is in GnuPG keyring.
     """
     keyid = f'<{keyid}>'
-    uids = [i for i in subrun(tools['gpg'], '--list-secret-keys').splitlines()
+    uids = [i for i in subqry(tools['gpg'], '--list-secret-keys').splitlines()
               if i.startswith('uid') and '[ultimate]' in i and keyid in i]
 
     return len(uids) > 0
@@ -341,7 +341,7 @@ def isrecipient(tools, keyid):
 def totp(tools, secret):
     """Generate TOTP code for service.
     """
-    return subrun(tools['oathtool'], '--base32', '--totp', secret)
+    return subqry(tools['oathtool'], '--base32', '--totp', secret)
 
 
 def sanitycheck(service, secret):
@@ -367,35 +367,37 @@ def clipboardinsert(tools, text):
         subrun(tools['xsel'], '--input', '--clipboard', inpt=text)
         print('Code copied to clipboard.')
     elif 'wl-copy' in tools:
-        # cannot use 'capture=True', so cannot use subrun()
-        if res := subprocess.run([tools['wl-copy'], text]).returncode != 0:
-            etext = res.stderr.decode(sys.stdout.encoding).strip() if res.stderr else ''
-            raise SubrunException(command, res.returncode, etext)
-        if res := subprocess.run([tools['wl-copy'], '--primary', text]).returncode != 0:
-            etext = res.stderr.decode(sys.stdout.encoding).strip() if res.stderr else ''
-            raise SubrunException(command, res.returncode, etext)
+        subrun(tools['wl-copy'], text)
+        subrun(tools['wl-copy'], '--primary', text)
         print('Code copied to clipboard.')
 
 
-def subrun(command, *options, inpt=None):
+def subqry(command, *options, inpt=None):
     """Execute system command.
     """
-    if inpt:
-        inpt = inpt.encode(sys.stdin.encoding) 
-
-    res = subprocess.run([command, *options], capture_output=True, input=inpt)
+    res = subprocess.run([command, *options], capture_output=True,
+                         text=True, input=inpt)
     if res.returncode != 0:
-        etext = res.stderr.decode(sys.stdout.encoding).strip() if res.stderr else ''
+        etext = res.stderr.strip() if res.stderr else ''
         raise SubrunException(command, res.returncode, etext)
                               
-    return res.stdout.decode(sys.stdout.encoding).strip() if res.stdout else ''
+    return res.stdout.strip() if res.stdout else ''
+
+
+def subrun(command, *options, inpt=None):
+    """Execute system command, no PIPE output capture.
+    """
+    res = subprocess.run([command, *options], text=True, input=inpt)
+    if res.returncode != 0:
+        print(res)
+        raise SubrunException(command, res.returncode, '')
 
 
 def zenity(tools, dialog, *options):
     """Show zenity dialog.
     """
     try:
-        return subrun(tools['zenity'], dialog, '--title=TVault', *options)
+        return subqry(tools['zenity'], dialog, '--title=TVault', *options)
     except SubrunException as e:
         if e.errorcode == 1:
             gerror(tools, 'Action cancelled by user.')
